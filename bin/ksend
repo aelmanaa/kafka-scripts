@@ -1,0 +1,90 @@
+#!/bin/bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+CONFIG_DIR=$DIR/../config
+. $DIR/common.sh
+load_config $(get_config_name "$@")
+
+unset MSG #unset msg to support default files
+
+printusage() {
+  echo "Usage: ksend -t <topic> [-f <file>|-m <message>]"
+  echo "	-t		Topic to send content to."
+  echo "	-f (Optional)	File to send content of."
+  echo "	-m (Optional)	Message to send as content."
+  echo "			(Either -f or -m has to be specified)"
+	echo "	-k (Optional)	Parse keys separated by ','"
+  echo ""
+  print_common_usage
+}
+
+while getopts ":f:t:m:khc" opt; do
+  case $opt in
+    h)
+      printusage && exit 0;
+      ;;
+    t)
+      TOPIC=$OPTARG
+      ;;
+    m)
+      MSG=$OPTARG
+      ;;
+    f)
+      FILE=$OPTARG
+      if [[ -d $FILE ]]; then
+        fail "Invalid argument for option '-f': '$FILE' must point to file but points to directory";
+      fi
+      if [[ ! -f $FILE ]]; then
+        fail "Invalid argument for option '-f': '$FILE' must point to a file";
+      fi
+      ;;
+	  k)
+			PARSE_KEYS=true
+			;;
+    \?)
+      fail "Invalid option: -$OPTARG"
+      ;;
+    :)
+      fail "Missing argument for -$OPTARG"
+      ;;
+  esac
+done
+
+if [[ -z $TOPIC ]]; then 
+  err "No topic defined!" && printusage && exit 1;
+fi
+if [[ ! -z $FILE && ! -z $MSG ]]; then
+  err "Invalid flag combination: '-f' and '-m' can not be combined" && printusage && exit 1;
+fi
+
+SEND_BASE_COMMAND="$KAFKA_HOME/bin/kafka-console-producer.sh \
+  --broker-list $BOOTSTRAP_SERVERS \
+  --topic $TOPIC"
+if [[ ! -z $PARSE_KEYS ]]; then
+	echo "Key parsing activated. NOTE: Follwing message format has to be used:<key>,<message>"
+  SEND_BASE_COMMAND="$SEND_BASE_COMMAND --property parse.key=true --property key.separator=,"
+fi
+
+if [[ ! -z $FILE ]]; then
+	echo "Start sending content of file [$FILE] on topic [$TOPIC]..."
+
+  START=$(date +%s)
+  $(cat $FILE | $SEND_BASE_COMMAND)
+  END=$(date +%s)
+  DIFF=$(( $END - $START  ))
+
+  echo "Sending content took ['$DIFF'] sec(s)"
+elif [[ ! -z $MSG ]]; then
+	echo "Start sending message on topic [$TOPIC]..."
+
+  START=$(date +%s)
+  $(echo $MSG | $SEND_BASE_COMMAND) 
+  END=$(date +%s)
+  DIFF=$(( $END - $START  ))
+
+  echo "Sending message took ['$DIFF'] sec(s)"
+else
+	echo "Start sending console input on topic [$TOPIC]..."
+
+  $($SEND_BASE_COMMAND)
+fi

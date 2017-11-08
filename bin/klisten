@@ -1,0 +1,116 @@
+#!/bin/bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+CONFIG_DIR=$DIR/../config
+. $DIR/common.sh
+load_config $(get_config_name "$@")
+
+CONSUMER_COUNT=1
+
+printusage() {
+  echo "Usage: klisten -t <topic>"
+  echo "	-t		Topic to listen to."
+	echo "	-b		Read topic from beginning."
+	echo "	-n		Amount of consumers to create."
+	echo "	-g		Name of consumer group to join."
+  echo ""
+  print_common_usage
+}
+
+check_if_group_exists() {
+  GROUP_EXISTS=$($GROUP_INFO_BASE_COMMAND \
+    --list \
+		|grep $1)
+  
+  if [[ -z $GROUP_EXISTS ]]; then
+	  err "Specified consumer group [$GROUP] not existing"
+		while true; do
+      read -p "Should it be created? " yn
+			case $yn in
+				[Yy]* )
+					echo "Consumer group [$GROUP] will be created..."
+					break
+					;;
+				[Nn]* ) 
+					echo "Listening aborted."
+					exit 0
+					;;
+				* )
+					echo "Only 'yes' or 'no'."
+					;;
+			esac
+		done
+	fi
+}
+
+cleanup() {
+	echo ""
+	echo "Cleaning up [$CONSUMER_COUNT] consumers..."
+	jobs -p |xargs kill &> /dev/null
+	echo "Clean up finished."
+}
+
+while getopts ":t:g:n:o:bhc" opt; do
+  case $opt in
+		b)
+		  READ_FROM_BEGINNING=true;
+			;;
+    h)
+      printusage && exit 0;
+      ;;
+    t)
+      TOPIC=$OPTARG;
+      ;;
+    g)
+      GROUP=$OPTARG;
+      ;;
+    n)
+      CONSUMER_COUNT=$OPTARG;
+			num_re='^[0-9]+$'
+			if ! [[ $CONSUMER_COUNT =~ $num_re ]]; then
+				fail "The amount of consumers is not valid: $CONSUMER_COUNT";
+			fi
+      ;;
+    \?)
+      fail "Invalid option: -$OPTARG";
+      ;;
+    :)
+      fail "Missing argument for -$OPTARG";
+      ;;
+  esac
+done
+
+if [[ -z $TOPIC ]]; then
+  err "No topic defined!" && printusage && exit 1;
+fi
+
+LISTEN_BASE_COMMAND="$KAFKA_HOME/bin/kafka-console-consumer.sh \
+  --zookeeper $ZOOKEEPERS \
+  --topic $TOPIC"
+GROUP_INFO_BASE_COMMAND="$KAFKA_HOME/bin/kafka-consumer-groups.sh \
+	--zookeeper $ZOOKEEPERS"
+if [[ ! -z $GROUP ]]; then
+	check_if_group_exists $GROUP
+
+	echo "Starting consumer as member of group [$GROUP]:"
+  $GROUP_INFO_BASE_COMMAND \
+    --group $GROUP \
+	  --describe
+
+  LISTEN_FINAL_COMMAND="$LISTEN_BASE_COMMAND \
+	  --consumer-property group.id=$GROUP"
+else
+	LISTEN_FINAL_COMMAND="$LISTEN_BASE_COMMAND"
+fi
+if [[ ! -z $READ_FROM_BEGINNING ]]; then
+	LISTEN_FINAL_COMMAND="$LISTEN_FINAL_COMMAND --from-beginning"
+fi
+
+trap cleanup INT
+echo "Start listening on topic [$TOPIC]..."
+for i in $(seq 1 $CONSUMER_COUNT); do
+  $LISTEN_FINAL_COMMAND |sed "s/^/[listener-$i]: /" &
+done
+
+sleep infinity
+

@@ -1,0 +1,8 @@
+#!/bin/bash
+
+export KAFKA_HOME=/opt/kafka
+
+export ZOOKEEPERS=10.137.0.194:2182,10.137.0.195:2182,10.137.0.196:2182
+export BOOTSTRAP_SERVERS=10.137.0.194:9092,10.137.0.195:9092,10.137.0.196:9092
+
+#export TOPIC=mytopic # default topic, get overridden by '-t'

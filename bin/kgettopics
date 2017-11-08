@@ -1,0 +1,46 @@
+#!/bin/bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+CONFIG_DIR=$DIR/../config
+source $DIR/common.sh
+load_config $(get_config_name "$@")
+
+printusage() {
+  echo "Usage: kgettopics [-t <topics>]"
+  echo "	-t (Optional)	Comma separated list of topics."
+  echo "			(if not specified, use all available topics)"
+  echo ""
+  print_common_usage
+}
+
+while getopts ":t:ahc" opt; do
+  case $opt in
+    h)
+      printusage && exit 0;
+      ;;
+    t)
+      TOPICS=$OPTARG
+      ;;
+    a)
+      unset TOPIC
+      unset TOPICS
+      ;;
+    \?)
+      fail "Invalid option: -$OPTARG"
+      ;;
+    :)
+      fail "Missing argument for -$OPTARG"
+      ;;
+  esac
+done
+
+if [[ -z $TOPICS && ! -z $TOPIC ]]; then # assign default topics if defined
+  TOPICS=$TOPIC
+else # if nothing defined -> get all available topics
+  TOPICS=$($KAFKA_HOME/bin/kafka-topics.sh --zookeeper $ZOOKEEPERS --list | paste -s -d",")
+	if [[ -z $TOPICS ]]; then
+		echo "No topics found." exit 0;
+	fi
+fi
+
+$KAFKA_HOME/bin/kafka-topics.sh --zookeeper $ZOOKEEPERS --topic $TOPICS --describe |egrep --color '^Topic:\S*|^'
