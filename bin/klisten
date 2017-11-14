@@ -109,7 +109,7 @@ fi
 trap cleanup INT
 echo "Start listening on topic [$TOPIC]..."
 for i in $(seq 1 $CONSUMER_COUNT); do
-  $LISTEN_FINAL_COMMAND |sed "s/^/[listener-$i]: /" &
+  $LISTEN_FINAL_COMMAND |sed "s/^/`printf \"\033[32m[listener-$i]\033[0m: \"/" &
 done
 
 sleep infinity
