@@ -37,7 +37,7 @@ done
 if [[ -z $TOPICS && ! -z $TOPIC ]]; then # assign default topics if defined
   TOPICS=$TOPIC
 else # if nothing defined -> get all available topics
-  TOPICS=$($KAFKA_HOME/bin/kafka-topics.sh --zookeeper $ZOOKEEPERS --list | paste -s -d",")
+  TOPICS=$($KAFKA_HOME/bin/kafka-topics.sh --zookeeper $ZOOKEEPERS --list |sed 's/ - [A-Za-z ]\+$//' |paste -s -d",")
 	if [[ -z $TOPICS ]]; then
 		echo "No topics found." exit 0;
 	fi
